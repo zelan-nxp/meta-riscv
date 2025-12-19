@@ -1,21 +1,35 @@
 #!/bin/bash
 # Bootstrapper for buildbot slave
 
-DIR="build"
+BUILD_DIR=.
+PROGNAME="setup.sh"
+DIR=$1
 MACHINE="qemuriscv64"
 DISTRO="poky-altcfg"
-CONFFILE="conf/auto.conf"
-# core-image-sato, corea-image-sato-sdk
-BITBAKEIMAGE="core-image-full-cmdline"
+PACKAGE_CLASSES=${PACKAGE_CLASSES:-package_rpm}
+SDKMACHINE=${SDKMACHINE:-"x86_64"}
 
-# make sure sstate is there
-#echo "Creating sstate directory"
-#mkdir -p ~/sstate/$MACHINE
+if [ -z "$DIR" ]; then
+    DIR=build
+fi
+usage(){
+    echo  -e "
+    Usage: source setup.sh [build_dir]
+Examples:
 
-# fix permissions set by buildbot
-#echo "Fixing permissions for buildbot"
-#umask -S u=rwx,g=rx,o=rx
-#chmod -R 755 .
+- To create a new Yocto build directory:
+  source $PROGNAME build
+
+- To use an existing Yocto build directory:
+  $ source $PROGNAME build
+"
+}
+
+clean_up()
+{
+   unset MACHINE DISTRO OEROOT
+}
+
 
 # Reconfigure dash on debian-like systems
 which aptitude > /dev/null 2>&1
@@ -27,43 +41,49 @@ elif [ "${0##*/}" = "dash" ]; then
   echo "dash as default shell is not supported"
   return
 fi
+
+if [ ! -e $1/conf/local.conf.sample ]; then
+    build_dir_setup_enabled="true"
+else
+    build_dir_setup_enabled="false"
+fi
+
 # bootstrap OE
 echo "Init OE"
-export BASH_SOURCE="openembedded-core/oe-init-build-env"
-. ./openembedded-core/oe-init-build-env $DIR
+OEROOT=$PWD/layers/openembedded-core
 
-# Symlink the cache
-#echo "Setup symlink for sstate"
-#ln -s ~/sstate/${MACHINE} sstate-cache
+. $OEROOT/oe-init-build-env $PWD/$DIR > /dev/null
+
+if [ "$build_dir_setup_enabled" = "true" ]; then
+    mv conf/local.conf conf/local.conf.sample
+    grep -v '^#\|^$' conf/local.conf.sample > conf/local.conf
+    cat >> conf/local.conf <<EOF
+DL_DIR ?= "\${BSPDIR}/downloads/"
+SSTATE_DIR ?= "\${BSPDIR}/sstate-cache/"
+EOF
+    if ! grep -q "DISTRO ?=" conf/local.conf; then
+        sed "1iDISTRO ?= '$DISTRO'" -i conf/local.conf
+    fi
+    sed -e "s,MACHINE ??=.*,MACHINE ??= '$MACHINE',g" \
+        -e "s,DISTRO ?=.*,DISTRO ?= '$DISTRO',g" \
+        -e "s,PACKAGE_CLASSES ?=.*,PACKAGE_CLASSES ?= '$PACKAGE_CLASSES',g" \
+        -e "s,SDKMACHINE ??=.*,SDKMACHINE ??= '$SDKMACHINE',g" \
+        -i conf/local.conf
+    echo "PACKAGECONFIG:append:pn-qemu-system-native = \" sdl\"" conf/local.conf
+fi
+# core-image-sato, corea-image-sato-sdk
+BITBAKEIMAGE="core-image-full-cmdline"
 
 # add the missing layers
 echo "Adding layers"
-bitbake-layers add-layer ../meta-yocto/meta-poky
-bitbake-layers add-layer ../meta-openembedded/meta-oe
-bitbake-layers add-layer ../meta-openembedded/meta-python
-bitbake-layers add-layer ../meta-openembedded/meta-multimedia
-bitbake-layers add-layer ../meta-openembedded/meta-networking
-bitbake-layers add-layer ../meta-riscv
+echo "BSPDIR := \"\${@os.path.abspath(os.path.dirname(d.getVar('FILE', True)) + '/../..')}\"" >> ${BUILD_DIR}/conf/bblayers.conf
 
-# fix the configuration
-echo "Creating auto.conf"
-
-if [ -e $CONFFILE ]; then
-    rm -rf $CONFFILE
-fi
-cat <<EOF > $CONFFILE
-MACHINE ?= "${MACHINE}"
-DISTRO = "${DISTRO}"
-#IMAGE_FEATURES += "tools-debug"
-#IMAGE_FEATURES += "tools-tweaks"
-#IMAGE_FEATURES += "dbg-pkgs"
-# rootfs for debugging
-#IMAGE_GEN_DEBUGFS = "1"
-#IMAGE_FSTYPES_DEBUGFS = "tar.gz"
-PACKAGECONFIG:append:pn-qemu-native = " sdl"
-PACKAGECONFIG:append:pn-nativesdk-qemu = " sdl"
-USER_CLASSES:append = " buildstats buildhistory buildstats-summary"
-EOF
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-yocto/meta-poky \"" >> ${BUILD_DIR}/conf/bblayers.conf
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-openembedded/meta-oe \"" >> ${BUILD_DIR}/conf/bblayers.conf
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-openembedded/meta-python \"" >> ${BUILD_DIR}/conf/bblayers.conf
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-openembedded/meta-multimedia \"" >> ${BUILD_DIR}/conf/bblayers.conf
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-openembedded/meta-networking \"" >> ${BUILD_DIR}/conf/bblayers.conf
+echo "BBLAYERS += \"\${BSPDIR}/layers/meta-riscv \"" >> ${BUILD_DIR}/conf/bblayers.conf
 
 echo "To build an image run"
 echo "---------------------------------------------------"
@@ -80,4 +100,3 @@ echo "---------------------------------------------------"
 # start build
 #echo "Starting build"
 #bitbake $BITBAKEIMAGE
-
