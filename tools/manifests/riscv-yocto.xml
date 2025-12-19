@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <manifest>
-  <remote name="openembedded" fetch="https://github.com/openembedded/" />
-  <remote name="riscv" fetch="https://github.com/riscv/" />
-  <remote name="yoe" fetch="https://github.com/YoeDistro/" />
-  <remote name="yocto" fetch="https://git.yoctoproject.org/" />
-  <default remote="openembedded" revision="master" />
 
-  <project name="meta-riscv" remote="yoe" path="layers/meta-riscv" revision="master" >
-    <linkfile src="tools/setup.sh" dest="setup.sh"/>
+  <remote name="github" fetch="https://github.com/" alias="origin"/>
+  <remote name="yocto"  fetch="https://git.yoctoproject.org/" alias="origin" />
+  <default remote="github" revision="master" />
+
+  <project name="zelan-nxp/meta-riscv.git"            path="layers/meta-riscv">
+    <linkfile src="tools/setup.sh"  dest="setup.sh"/>
   </project>
-  <project name="openembedded-core" remote="openembedded" path="layers/openembedded-core" revision="master" />
-  <project name="bitbake" remote="openembedded" path="layers/openembedded-core/bitbake" revision="master" />
-  <project name="meta-openembedded" remote="openembedded" path="layers/meta-openembedded" revision="master" />
-  <project name="meta-yocto" remote="yocto" path="layers/meta-yocto" revision="master" />
+  <project name="openembedded/openembedded-core.git"  path="layers/openembedded-core" />
+  <project name="openembedded/bitbake.git"            path="layers/bitbake"           />
+  <project name="openembedded/meta-openembedded.git"  path="layers/meta-openembedded" />
+  <project name="meta-yocto"   remote="yocto"         path="layers/meta-yocto" />
 
 </manifest>
